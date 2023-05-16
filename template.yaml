@@ -215,6 +215,7 @@ Resources:
     Properties:
       ApiId: !Ref Websocket
 
+
   # Role for APIGW Logging
   ApiGatewayLoggingRole:
     Type: AWS::IAM::Role
