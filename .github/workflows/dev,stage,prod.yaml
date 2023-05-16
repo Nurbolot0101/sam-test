@@ -1,7 +1,9 @@
 on:
   push:
     branches:
-      - ["dev","stage","prod"]
+      - "dev"
+      - "stage"
+      - "prod"
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
