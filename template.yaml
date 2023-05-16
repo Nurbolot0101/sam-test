@@ -1,0 +1,364 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  hello-auth
+
+  Sample SAM Template for hello-auth
+  
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+
+Resources:
+
+# Rest API Gateway
+  Api:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: Services
+
+# /hello path    
+  Hello:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref Api
+      ParentId: !GetAtt 
+        - Api
+        - RootResourceId
+      PathPart: hello
+
+  HelloMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      RestApiId: !Ref Api
+      ResourceId: !Ref Hello
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloWorldFunctionTS.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+      MethodResponses:
+        - StatusCode: 200
+  
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HelloWorldFunctionTS
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*/GET/hello
+
+# /hello-authorizer path
+  HelloAuthorizer:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref Api
+      ParentId: !GetAtt 
+        - Api
+        - RootResourceId
+      PathPart: hello-authorizer
+
+  HelloAuthorizerMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      RestApiId: !Ref Api
+      ResourceId: !Ref HelloAuthorizer
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref Authorizer
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloWorldFunctionTS.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+      MethodResponses:
+        - StatusCode: 200
+
+  LambdaPermissionAuthorizer:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HelloWorldFunctionTS
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*/GET/hello-authorizer
+
+# /hello-go path
+  HelloGo:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref Api
+      ParentId: !GetAtt 
+        - Api
+        - RootResourceId
+      PathPart: hello-go
+
+  HelloGoMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      RestApiId: !Ref Api
+      ResourceId: !Ref HelloGo
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref Authorizer
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloWorldFunctionGo.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+      MethodResponses:
+        - StatusCode: 200
+
+  LambdaPermissionGo:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HelloWorldFunctionGo
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*/GET/hello-go
+
+# Rest API Deployment
+  Deployment:
+    DependsOn:
+      - HelloMethod
+      - HelloAuthorizerMethod
+      - HelloAuthorizerMethod
+    Type: 'AWS::ApiGateway::Deployment'
+    Properties:
+      RestApiId: !Ref Api
+      StageName: api
+
+  Authorizer:
+    Type: 'AWS::ApiGateway::Authorizer'
+    Properties:
+      AuthorizerResultTtlInSeconds: '1'
+      AuthorizerUri: !Join 
+        - ''
+        - - 'arn:aws:apigateway:'
+          - !Ref 'AWS::Region'
+          - ':lambda:path/2015-03-31/functions/'
+          - !GetAtt 
+            - AuthFunction
+            - Arn
+          - /invocations
+      Type: TOKEN
+      IdentitySource: method.request.header.authorizationToken
+      Name: LambdaTokenAuthorizer
+      RestApiId: !Ref Api
+
+# Hello World Typescript Function
+  HelloWorldFunctionTS:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/hello-world-ts/
+      Handler: app.lambdaHandler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints: 
+        - app.ts
+        External: 
+          - 'aws-sdk'
+
+# Hello World Go Function
+  HelloWorldFunctionGo:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/hello-world-go/
+      Handler: hello-world
+      Runtime: go1.x
+      Architectures:
+        - x86_64
+  
+# Authorization Function
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/authorizer/
+      Handler: authorizer.handler      
+      Runtime: nodejs18.x
+  
+
+
+
+# Websocket Api Gateway
+  Websocket:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: Websocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: v1
+      Description: Version 1 'stage'
+      DeploymentId: !Ref Deployment
+      ApiId: !Ref Websocket
+
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - ConnectRoute
+    Properties:
+      ApiId: !Ref Websocket
+
+  # Role for APIGW Logging
+  ApiGatewayLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Allows APIGateway to write to cloudwatch logs.
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.comree
+        Version: "2012-10-17"
+      MaxSessionDuration: 3600
+      Path: '/'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  ApiGatewayLoggingRoleAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayLoggingRole.Arn
+
+
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Websocket
+      RouteKey: "$connect"
+      OperationName: connect
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref AuthWebsocket
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref HelloIntegration
+
+  ConnectFunctionPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - Api
+      - HelloWorldFunctionTSWebsocket
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref HelloWorldFunctionTSWebsocket
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Websocket}/*/*
+
+  SendMessagePermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - Api
+      - HelloWorldFunctionTSWebsocket
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref HelloWorldFunctionTSWebsocket
+      Principal: apigateway.amazonaws.com
+
+  SendMessage:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Websocket
+      RouteKey: "sendMessage"
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref HelloIntegration
+  
+  HelloIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref Websocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloWorldFunctionTSWebsocket.Arn}/invocations
+
+ 
+  HelloWorldFunctionTSWebsocketPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - Api
+      - HelloWorldFunctionTSWebsocket
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref HelloWorldFunctionTSWebsocket
+      Principal: apigateway.amazonaws.com
+
+
+  HelloWorldFunctionTSWebsocket:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/hello-world-ts-websocket/
+      Handler: app.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      Policies:
+      - Statement:
+        - Sid: InvokeFunction
+          Effect: Allow
+          Action:
+          - execute-api:Invoke
+          - execute-api:ManageConnections
+          Resource: '*'
+    Metadata: # Manage esbuild properties
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints: 
+        - app.ts
+        External: 
+          - 'aws-sdk'
+
+
+  LambdaRequestAuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: authorizer.handler
+      Timeout: 30
+      Runtime: nodejs18.x
+      CodeUri: src/authorizer-websocket
+      # Policies:
+      #   - AWSLambdaFullAccess
+      #   - CloudWatchLogsFullAccess
+
+  AuthWebsocket:
+    Type: "AWS::ApiGatewayV2::Authorizer"
+    Properties:
+      Name: My-Authorizer
+      ApiId: !Ref Websocket
+      AuthorizerType: REQUEST
+      AuthorizerUri:
+        Fn::Sub:
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaRequestAuthFunction.Arn}/invocations
+      IdentitySource:
+        - "route.request.querystring.QueryString1"
+        - "route.request.header.HeaderAuth1"
+
+  AuthorizerFunctionPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - Websocket
+      - LambdaRequestAuthFunction
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaRequestAuthFunction
+      Principal: apigateway.amazonaws.com
