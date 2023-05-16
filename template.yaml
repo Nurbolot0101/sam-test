@@ -225,7 +225,7 @@ Resources:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
-              Service: apigateway.amazonaws.comree
+              Service: apigateway.amazonaws.com
         Version: "2012-10-17"
       MaxSessionDuration: 3600
       Path: '/'
