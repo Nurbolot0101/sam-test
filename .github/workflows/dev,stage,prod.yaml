@@ -1,8 +1,7 @@
 on:
   push:
     branches:
-      - main
-jobs:
+      - ["dev","stage","prod"]
   build-deploy:
     runs-on: ubuntu-latest
     steps:
@@ -19,4 +18,9 @@ jobs:
 # Run Unit tests- Specify unit tests here 
 
 # sam deploy
-      - run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name demo
+      - if: github.ref == 'refs/heads/dev'
+        run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name dev-stack
+      - if: github.ref == 'refs/heads/stage'
+        run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name stage-stack
+      - if: github.ref == 'refs/heads/prod'
+        run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name prod-stack
